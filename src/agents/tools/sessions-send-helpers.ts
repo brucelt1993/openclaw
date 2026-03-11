@@ -152,7 +152,19 @@ export function isAnnounceSkip(text?: string) {
 }
 
 export function isReplySkip(text?: string) {
-  return (text ?? "").trim() === REPLY_SKIP_TOKEN;
+  const normalized = (text ?? "").trim();
+  // Exact match for REPLY_SKIP
+  if (normalized === REPLY_SKIP_TOKEN) {
+    return true;
+  }
+  // Also accept NO_REPLY (common agent output)
+  if (normalized === "NO_REPLY") {
+    return true;
+  }
+  // Check if the text ends with either token (handles embedded cases)
+  const lines = normalized.split("\n");
+  const lastLine = lines[lines.length - 1]?.trim();
+  return lastLine === REPLY_SKIP_TOKEN || lastLine === "NO_REPLY";
 }
 
 export function resolvePingPongTurns(cfg?: OpenClawConfig) {
