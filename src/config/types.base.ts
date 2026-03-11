@@ -128,6 +128,8 @@ export type SessionConfig = {
   agentToAgent?: {
     /** Max ping-pong turns between requester/target (0–5). Default: 5. */
     maxPingPongTurns?: number;
+    /** Whether to broadcast each ping-pong reply to the target external channel. Default: false. */
+    broadcastPingPong?: boolean;
   };
   /** Shared defaults for thread-bound session routing across channels/providers. */
   threadBindings?: SessionThreadBindingsConfig;

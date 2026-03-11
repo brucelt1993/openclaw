@@ -21,6 +21,7 @@ export async function runSessionsSendA2AFlow(params: {
   message: string;
   announceTimeoutMs: number;
   maxPingPongTurns: number;
+  broadcastPingPong?: boolean;
   requesterSessionKey?: string;
   requesterChannel?: GatewayMessageChannel;
   roundOneReply?: string;
@@ -56,6 +57,34 @@ export async function runSessionsSendA2AFlow(params: {
       displayKey: params.displayKey,
     });
     const targetChannel = announceTarget?.channel ?? "unknown";
+
+    const sendToAnnounceTarget = async (message: string, phase: "ping_pong" | "announce", turn?: number) => {
+      if (!announceTarget || !message.trim()) {
+        return;
+      }
+      try {
+        await callGateway({
+          method: "send",
+          params: {
+            to: announceTarget.to,
+            message: message.trim(),
+            channel: announceTarget.channel,
+            accountId: announceTarget.accountId,
+            idempotencyKey: crypto.randomUUID(),
+          },
+          timeoutMs: 10_000,
+        });
+      } catch (err) {
+        log.warn("sessions_send external delivery failed", {
+          runId: runContextId,
+          phase,
+          turn,
+          channel: announceTarget.channel,
+          to: announceTarget.to,
+          error: formatErrorMessage(err),
+        });
+      }
+    };
 
     if (
       params.maxPingPongTurns > 0 &&
@@ -93,6 +122,20 @@ export async function runSessionsSendA2AFlow(params: {
         }
         latestReply = replyText;
         incomingMessage = replyText;
+
+        if (params.broadcastPingPong) {
+          const speaker =
+            currentSessionKey === params.requesterSessionKey ? "requester" : "target";
+          const pingPongMessage = [
+            `[A2A ping-pong][turn ${turn}]`,
+            `speaker: ${speaker}`,
+            `session: ${currentSessionKey}`,
+            "",
+            replyText.trim(),
+          ].join("\n");
+          await sendToAnnounceTarget(pingPongMessage, "ping_pong", turn);
+        }
+
         const swap = currentSessionKey;
         currentSessionKey = nextSessionKey;
         nextSessionKey = swap;
@@ -119,26 +162,7 @@ export async function runSessionsSendA2AFlow(params: {
       sourceTool: "sessions_send",
     });
     if (announceTarget && announceReply && announceReply.trim() && !isAnnounceSkip(announceReply)) {
-      try {
-        await callGateway({
-          method: "send",
-          params: {
-            to: announceTarget.to,
-            message: announceReply.trim(),
-            channel: announceTarget.channel,
-            accountId: announceTarget.accountId,
-            idempotencyKey: crypto.randomUUID(),
-          },
-          timeoutMs: 10_000,
-        });
-      } catch (err) {
-        log.warn("sessions_send announce delivery failed", {
-          runId: runContextId,
-          channel: announceTarget.channel,
-          to: announceTarget.to,
-          error: formatErrorMessage(err),
-        });
-      }
+      await sendToAnnounceTarget(announceReply, "announce");
     }
   } catch (err) {
     log.warn("sessions_send announce flow failed", {

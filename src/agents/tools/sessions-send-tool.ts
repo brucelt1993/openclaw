@@ -235,7 +235,11 @@ export function createSessionsSendTool(opts?: {
       const requesterSessionKey = opts?.agentSessionKey;
       const requesterChannel = opts?.agentChannel;
       const maxPingPongTurns = resolvePingPongTurns(cfg);
-      const delivery = { status: "pending", mode: "announce" as const };
+      const broadcastPingPong = cfg?.session?.agentToAgent?.broadcastPingPong === true;
+      const delivery = {
+        status: "pending",
+        mode: broadcastPingPong ? ("ping_pong+announce" as const) : ("announce" as const),
+      };
       const startA2AFlow = (roundOneReply?: string, waitRunId?: string) => {
         void runSessionsSendA2AFlow({
           targetSessionKey: resolvedKey,
@@ -243,6 +247,7 @@ export function createSessionsSendTool(opts?: {
           message,
           announceTimeoutMs,
           maxPingPongTurns,
+          broadcastPingPong,
           requesterSessionKey,
           requesterChannel,
           roundOneReply,
