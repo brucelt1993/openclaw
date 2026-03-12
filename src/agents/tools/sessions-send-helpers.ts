@@ -171,6 +171,20 @@ export function isReplySkip(text?: string) {
   return lastLine === REPLY_SKIP_TOKEN || lastLine === "NO_REPLY";
 }
 
+/** Strip trailing REPLY_SKIP / NO_REPLY tokens from text before broadcasting. */
+export function stripReplySkipToken(text: string): string {
+  const lines = text.trim().split("\n");
+  while (lines.length > 0) {
+    const last = lines[lines.length - 1]?.trim();
+    if (last === REPLY_SKIP_TOKEN || last === "NO_REPLY" || last === ANNOUNCE_SKIP_TOKEN || last === "") {
+      lines.pop();
+    } else {
+      break;
+    }
+  }
+  return lines.join("\n").trim();
+}
+
 export function resolvePingPongTurns(cfg?: OpenClawConfig) {
   const raw = cfg?.session?.agentToAgent?.maxPingPongTurns;
   const fallback = DEFAULT_PING_PONG_TURNS;

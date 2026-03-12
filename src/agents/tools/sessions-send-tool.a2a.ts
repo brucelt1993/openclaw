@@ -12,6 +12,7 @@ import {
   buildAgentToAgentReplyContext,
   isAnnounceSkip,
   isReplySkip,
+  stripReplySkipToken,
 } from "./sessions-send-helpers.js";
 
 const log = createSubsystemLogger("agents/sessions-send");
@@ -129,7 +130,7 @@ export async function runSessionsSendA2AFlow(params: {
           to: announceTarget.to,
           replyLength: primaryReply.trim().length,
         });
-        await sendToChannel(announceTarget, primaryReply.trim(), "ping_pong", 0);
+        await sendToChannel(announceTarget, stripReplySkipToken(primaryReply), "ping_pong", 0);
       }
 
       let currentSessionKey = params.requesterSessionKey;
@@ -192,7 +193,7 @@ export async function runSessionsSendA2AFlow(params: {
               to: speakerTarget.to,
               replyLength: replyText.trim().length,
             });
-            await sendToChannel(speakerTarget, replyText.trim(), "ping_pong", turn);
+            await sendToChannel(speakerTarget, stripReplySkipToken(replyText), "ping_pong", turn);
           } else {
             log.warn("A2A ping-pong broadcast skipped: no speaker target", {
               runId: runContextId,
