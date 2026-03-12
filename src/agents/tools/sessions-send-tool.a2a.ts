@@ -7,6 +7,7 @@ import { AGENT_LANE_NESTED } from "../lanes.js";
 import { readLatestAssistantReply, runAgentStep } from "./agent-step.js";
 import { resolveAnnounceTarget } from "./sessions-announce-target.js";
 import {
+  type AnnounceTarget,
   buildAgentToAgentAnnounceContext,
   buildAgentToAgentReplyContext,
   isAnnounceSkip,
@@ -65,25 +66,32 @@ export async function runSessionsSendA2AFlow(params: {
       sessionKey: params.targetSessionKey,
       displayKey: params.displayKey,
     });
+    const requesterAnnounceTarget = params.requesterSessionKey
+      ? await resolveAnnounceTarget({
+          sessionKey: params.requesterSessionKey,
+          displayKey: params.requesterSessionKey,
+        })
+      : null;
     const targetChannel = announceTarget?.channel ?? "unknown";
     log.info("A2A announce target resolved", {
       runId: runContextId,
       hasTarget: !!announceTarget,
+      hasRequesterTarget: !!requesterAnnounceTarget,
       channel: targetChannel,
     });
 
-    const sendToAnnounceTarget = async (message: string, phase: "ping_pong" | "announce", turn?: number) => {
-      if (!announceTarget || !message.trim()) {
+    const sendToChannel = async (target: AnnounceTarget, message: string, phase: "ping_pong" | "announce", turn?: number) => {
+      if (!message.trim()) {
         return;
       }
       try {
         await callGateway({
           method: "send",
           params: {
-            to: announceTarget.to,
+            to: target.to,
             message: message.trim(),
-            channel: announceTarget.channel,
-            accountId: announceTarget.accountId,
+            channel: target.channel,
+            accountId: target.accountId,
             idempotencyKey: crypto.randomUUID(),
           },
           timeoutMs: 10_000,
@@ -92,8 +100,8 @@ export async function runSessionsSendA2AFlow(params: {
           runId: runContextId,
           phase,
           turn,
-          channel: announceTarget.channel,
-          to: announceTarget.to,
+          channel: target.channel,
+          to: target.to,
           messageLength: message.trim().length,
         });
       } catch (err) {
@@ -101,8 +109,8 @@ export async function runSessionsSendA2AFlow(params: {
           runId: runContextId,
           phase,
           turn,
-          channel: announceTarget.channel,
-          to: announceTarget.to,
+          channel: target.channel,
+          to: target.to,
           error: formatErrorMessage(err),
         });
       }
@@ -113,6 +121,17 @@ export async function runSessionsSendA2AFlow(params: {
       params.requesterSessionKey &&
       params.requesterSessionKey !== params.targetSessionKey
     ) {
+      // Broadcast the initial reply (from target/乙方) before ping-pong starts
+      if (params.broadcastPingPong && announceTarget && primaryReply) {
+        log.info("A2A broadcasting initial reply from target", {
+          runId: runContextId,
+          channel: announceTarget.channel,
+          to: announceTarget.to,
+          replyLength: primaryReply.trim().length,
+        });
+        await sendToChannel(announceTarget, primaryReply.trim(), "ping_pong", 0);
+      }
+
       let currentSessionKey = params.requesterSessionKey;
       let nextSessionKey = params.targetSessionKey;
       let incomingMessage = latestReply;
@@ -160,16 +179,27 @@ export async function runSessionsSendA2AFlow(params: {
         });
 
         if (params.broadcastPingPong) {
-          const speaker =
-            currentSessionKey === params.requesterSessionKey ? "requester" : "target";
-          const pingPongMessage = [
-            `[A2A ping-pong][turn ${turn}]`,
-            `speaker: ${speaker}`,
-            `session: ${currentSessionKey}`,
-            "",
-            replyText.trim(),
-          ].join("\n");
-          await sendToAnnounceTarget(pingPongMessage, "ping_pong", turn);
+          const speakerTarget =
+            currentSessionKey === params.requesterSessionKey
+              ? requesterAnnounceTarget
+              : announceTarget;
+          if (speakerTarget) {
+            log.info("A2A ping-pong broadcasting", {
+              runId: runContextId,
+              turn,
+              speaker: currentRole,
+              channel: speakerTarget.channel,
+              to: speakerTarget.to,
+              replyLength: replyText.trim().length,
+            });
+            await sendToChannel(speakerTarget, replyText.trim(), "ping_pong", turn);
+          } else {
+            log.warn("A2A ping-pong broadcast skipped: no speaker target", {
+              runId: runContextId,
+              turn,
+              speaker: currentRole,
+            });
+          }
         }
 
         const swap = currentSessionKey;
@@ -204,7 +234,7 @@ export async function runSessionsSendA2AFlow(params: {
         channel: targetChannel,
         replyLength: announceReply.trim().length,
       });
-      await sendToAnnounceTarget(announceReply, "announce");
+      await sendToChannel(announceTarget, announceReply, "announce");
     } else {
       log.info("A2A announce skipped", {
         runId: runContextId,
