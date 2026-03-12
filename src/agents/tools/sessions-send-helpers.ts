@@ -124,6 +124,7 @@ export function buildAgentToAgentAnnounceContext(params: {
   originalMessage: string;
   roundOneReply?: string;
   latestReply?: string;
+  broadcastPingPong?: boolean;
 }) {
   const lines = [
     "Agent-to-agent announce step:",
@@ -140,6 +141,9 @@ export function buildAgentToAgentAnnounceContext(params: {
       ? `Round 1 reply: ${params.roundOneReply}`
       : "Round 1 reply: (not available).",
     params.latestReply ? `Latest reply: ${params.latestReply}` : "Latest reply: (not available).",
+    params.broadcastPingPong
+      ? "IMPORTANT: Each ping-pong round has already been broadcast to the target channel in real time. Do NOT repeat the negotiation details. Only output a brief final conclusion or result summary. If there is nothing new to add, reply exactly \"ANNOUNCE_SKIP\"."
+      : undefined,
     `If you want to remain silent, reply exactly "${ANNOUNCE_SKIP_TOKEN}".`,
     "Any other reply will be posted to the target channel.",
     "After this reply, the agent-to-agent conversation is over.",

@@ -186,6 +186,7 @@ export async function runSessionsSendA2AFlow(params: {
       originalMessage: params.message,
       roundOneReply: primaryReply,
       latestReply,
+      broadcastPingPong: params.broadcastPingPong,
     });
     const announceReply = await runAgentStep({
       sessionKey: params.targetSessionKey,
